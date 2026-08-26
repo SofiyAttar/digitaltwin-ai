@@ -1,0 +1,73 @@
+{
+    "plant_name": "Assembly Plant 1 - Trim & Chassis Line",
+    "target_takt_time_seconds": 60.0,
+    "conveyor_transit_time_seconds": 10.0,
+    "max_buffer_capacity": 2,
+    "quality_tolerance_threshold": 4.5,
+    "stations": [
+        {
+            "id": "S1",
+            "name": "Underbody Subframe Weld",
+            "type": "automated",
+            "has_sensors": true,
+            "base_cycle_time": 60.0,
+            "variance_std": 2.0
+        },
+        {
+            "id": "S2",
+            "name": "Body Framing Marriage",
+            "type": "automated",
+            "has_sensors": true,
+            "base_cycle_time": 60.0,
+            "variance_std": 2.5
+        },
+        {
+            "id": "S3",
+            "name": "Interior Wire Harness",
+            "type": "manual",
+            "has_sensors": false,
+            "base_cycle_time": 60.0,
+            "variance_std": 8.0
+        },
+        {
+            "id": "S4",
+            "name": "Powertrain Engine Drop",
+            "type": "automated",
+            "has_sensors": true,
+            "base_cycle_time": 60.0,
+            "variance_std": 3.0
+        },
+        {
+            "id": "S5",
+            "name": "Door & Dashboard Fit",
+            "type": "manual",
+            "has_sensors": false,
+            "base_cycle_time": 60.0,
+            "variance_std": 8.0
+        },
+        {
+            "id": "S6",
+            "name": "Fluid Fill & Wheel Mount",
+            "type": "automated",
+            "has_sensors": true,
+            "base_cycle_time": 60.0,
+            "variance_std": 2.0
+        },
+        {
+            "id": "S7",
+            "name": "ADAS Calibration",
+            "type": "automated",
+            "has_sensors": true,
+            "base_cycle_time": 60.0,
+            "variance_std": 2.0
+        },
+        {
+            "id": "S8",
+            "name": "End-of-Line Quality Dyno",
+            "type": "automated",
+            "has_sensors": true,
+            "base_cycle_time": 60.0,
+            "variance_std": 1.5
+        }
+    ]
+}
