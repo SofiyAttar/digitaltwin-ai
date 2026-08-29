@@ -55,16 +55,19 @@ class AssemblyLineSimulation:
         self.conveyor_time = float(self.config.get("conveyor_transit_time_seconds", 10.0))
         self.buffer_capacity = int(self.config.get("max_buffer_capacity", 2))
 
-        # Core SimPy Resources: 1 vehicle capacity per physical workstation
-        self.station_resources: Dict[str, simpy.Resource] = {}
-        for st in self.stations_config:
-            self.station_resources[st["id"]] = simpy.Resource(self.env, capacity=1)
-
-        # Inter-station buffers: Store holding max N chassis between station_i and station_i+1
+        # Inter-station buffers: Store holding max N chassis between station_i and station_i+1.
+        # Each station runs as its own persistent server process (see _station_process) that
+        # pulls from its input buffer and pushes to its output buffer, so buffer occupancy
+        # genuinely reflects whether the next station is keeping up — that's what lets
+        # STATION_BLOCKED / STATION_STARVED fire correctly.
         self.buffers: Dict[str, simpy.Store] = {}
         for i in range(len(self.stations_config) - 1):
             buf_name = f"B{i+1}"
             self.buffers[buf_name] = simpy.Store(self.env, capacity=self.buffer_capacity)
+
+        # Unbounded entry queue feeding the first station — this represents the plant's
+        # release schedule (paced by takt time in _chassis_generator), not a physical buffer.
+        self.entry_queue: simpy.Store = simpy.Store(self.env)
 
         # Tracking state
         self.station_status: Dict[str, str] = {st["id"]: "IDLE" for st in self.stations_config}
@@ -128,87 +131,97 @@ class AssemblyLineSimulation:
 
         return round(deviation, 3)
 
-    def _vehicle_process(self, chassis: Chassis):
-        """Process that moves an individual chassis sequentially through all 8 stations."""
+    def _station_process(self, idx: int):
+        """
+        Persistent server process for one station. Runs for the lifetime of the
+        simulation, repeatedly: pulling a chassis from its input buffer (waiting,
+        i.e. STARVED, if none is available), doing the work, then handing the
+        finished chassis to its output buffer (waiting, i.e. BLOCKED, if that
+        buffer is already full). This is what makes buffer occupancy — and
+        therefore STATION_BLOCKED / STATION_STARVED — reflect real upstream and
+        downstream state, rather than a fixed per-chassis timer.
+        """
+        st_cfg = self.stations_config[idx]
+        st_id = st_cfg["id"]
         num_stations = len(self.stations_config)
+        is_first = (idx == 0)
+        is_last = (idx == num_stations - 1)
+        in_buffer = self.entry_queue if is_first else self.buffers[f"B{idx}"]
+        out_buffer = None if is_last else self.buffers[f"B{idx + 1}"]
 
-        for idx, st_cfg in enumerate(self.stations_config):
-            st_id = st_cfg["id"]
-            res = self.station_resources[st_id]
+        while True:
+            # 1. Pull the next chassis from upstream. If nothing is waiting,
+            # this station is starved until one arrives.
+            was_starved = len(in_buffer.items) == 0
+            chassis = yield in_buffer.get()
 
-            # 1. Request access to the physical station
-            with res.request() as req:
-                yield req  # Waits if station is currently occupied
+            if not is_first:
+                if was_starved:
+                    self._log_event("STATION_STARVED", st_id, chassis.vin, {"buffer": f"B{idx}"})
+                # Conveyor transit time from the previous station
+                yield self.env.timeout(self.conveyor_time)
 
-                # 2. Enter Station
-                entry_time = self.env.now
-                chassis.log_station_entry(st_id, entry_time)
-                self.station_status[st_id] = "BUSY"
-                self.station_active_vin[st_id] = chassis.vin
-                self._log_event("STATION_ENTER", st_id, chassis.vin, {"status": "BUSY"})
+            # 2. Enter station
+            entry_time = self.env.now
+            chassis.log_station_entry(st_id, entry_time)
+            self.station_status[st_id] = "BUSY"
+            self.station_active_vin[st_id] = chassis.vin
+            self._log_event("STATION_ENTER", st_id, chassis.vin, {"status": "BUSY"})
 
-                # 3. Simulate assembly operation work duration
-                cycle_time = self._calculate_cycle_time(st_cfg, chassis)
-                yield self.env.timeout(cycle_time)
+            # 3. Simulate assembly operation work duration
+            cycle_time = self._calculate_cycle_time(st_cfg, chassis)
+            yield self.env.timeout(cycle_time)
 
-                # 4. Record tolerances and exit timestamp
-                exit_time = self.env.now
-                chassis.log_station_exit(st_id, exit_time, cycle_time)
-                
-                tol = self._calculate_tolerance_drift(st_cfg)
-                chassis.record_tolerance(st_id, tol)
+            # 4. Record tolerances and exit timestamp
+            exit_time = self.env.now
+            chassis.log_station_exit(st_id, exit_time, cycle_time)
 
-                self._log_event("STATION_EXIT", st_id, chassis.vin, {
-                    "cycle_time": cycle_time,
-                    "tolerance_drift": tol,
-                    "cumulative_tolerance": round(chassis.cumulative_tolerance_score, 3)
+            tol = self._calculate_tolerance_drift(st_cfg)
+            chassis.record_tolerance(st_id, tol)
+
+            self._log_event("STATION_EXIT", st_id, chassis.vin, {
+                "cycle_time": cycle_time,
+                "tolerance_drift": tol,
+                "cumulative_tolerance": round(chassis.cumulative_tolerance_score, 3)
+            })
+
+            # 5. Hand off to downstream buffer, or complete the vehicle
+            if is_last:
+                self.station_status[st_id] = "IDLE"
+                self.station_active_vin[st_id] = None
+                chassis.completed = True
+                self.completed_chassis.append(chassis)
+                self._log_event("CHASSIS_COMPLETED", st_id, chassis.vin, {
+                    "final_tolerance_score": round(chassis.cumulative_tolerance_score, 3)
                 })
+            else:
+                # If the output buffer is already full, this station is physically
+                # blocked holding its finished unit until space opens up.
+                if len(out_buffer.items) >= out_buffer.capacity:
+                    self.station_status[st_id] = "BLOCKED"
+                    self._log_event("STATION_BLOCKED", st_id, chassis.vin, {"buffer": f"B{idx + 1}"})
 
-                # 5. Handle downstream Buffer Queueing & Blocking Dynamics
-                if idx < num_stations - 1:
-                    buf_name = f"B{idx+1}"
-                    buffer = self.buffers[buf_name]
-
-                    # If buffer is full, station becomes BLOCKED (cannot release finished vehicle)
-                    if len(buffer.items) >= buffer.capacity:
-                        self.station_status[st_id] = "BLOCKED"
-                        self._log_event("STATION_BLOCKED", st_id, chassis.vin, {"buffer": buf_name})
-
-                    # Put chassis into downstream buffer (waits if buffer is full)
-                    yield buffer.put(chassis)
-                    self.station_status[st_id] = "IDLE"
-                    self.station_active_vin[st_id] = None
-
-                    # Conveyor transit travel time to next station
-                    yield self.env.timeout(self.conveyor_time)
-
-                    # Pop chassis out of buffer when next station is ready
-                    yield buffer.get()
-                else:
-                    # Final station completed
-                    self.station_status[st_id] = "IDLE"
-                    self.station_active_vin[st_id] = None
-                    chassis.completed = True
-                    self.completed_chassis.append(chassis)
-                    self._log_event("CHASSIS_COMPLETED", st_id, chassis.vin, {
-                        "final_tolerance_score": round(chassis.cumulative_tolerance_score, 3)
-                    })
+                yield out_buffer.put(chassis)
+                self.station_status[st_id] = "IDLE"
+                self.station_active_vin[st_id] = None
 
     def _chassis_generator(self, total_vehicles: int):
-        """Releases sequenced chassis onto the line based on Takt pacing."""
+        """Releases sequenced chassis into the entry queue based on Takt pacing."""
         for i in range(total_vehicles):
             vin = f"VIN-{1001 + i}"
             variant = "SUV" if (i % 4 == 0) else "Sedan"  # Mixed-model variance
             chassis = Chassis(vin=vin, variant=variant)
             self.active_chassis_list.append(chassis)
-            
-            self.env.process(self._vehicle_process(chassis))
-            
+
+            yield self.entry_queue.put(chassis)
+
             # Pacing interval before next chassis enters the plant
             yield self.env.timeout(self.takt_time)
 
     def run_simulation(self, until_time: float = 3600.0, total_vehicles: int = 40):
         """Runs the discrete-event simulation up to a designated timestamp."""
+        for idx in range(len(self.stations_config)):
+            self.env.process(self._station_process(idx))
         self.env.process(self._chassis_generator(total_vehicles))
         self.env.run(until=until_time)
         return self.event_log
