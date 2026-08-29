@@ -2,52 +2,69 @@
   "target_takt_time_seconds": 60.0,
   "conveyor_transit_time_seconds": 10.0,
   "max_buffer_capacity": 2,
+  "quality_tolerance_threshold": 4.5,
   "stations": [
     {
       "id": "S1",
       "name": "Body Weld",
+      "type": "automated",
+      "has_sensors": true,
       "base_cycle_time": 55.0,
       "variance_std": 4.0
     },
     {
       "id": "S2",
       "name": "Paint Prep",
+      "type": "automated",
+      "has_sensors": true,
       "base_cycle_time": 58.0,
       "variance_std": 4.0
     },
     {
       "id": "S3",
       "name": "Interior Wiring",
+      "type": "manual",
+      "has_sensors": false,
       "base_cycle_time": 60.0,
       "variance_std": 6.0
     },
     {
       "id": "S4",
       "name": "Chassis Marriage",
+      "type": "automated",
+      "has_sensors": true,
       "base_cycle_time": 56.0,
       "variance_std": 4.0
     },
     {
       "id": "S5",
       "name": "Trim Fit",
+      "type": "manual",
+      "has_sensors": false,
       "base_cycle_time": 59.0,
       "variance_std": 6.0
     },
     {
       "id": "S6",
       "name": "Powertrain Fit",
+      "type": "automated",
+      "has_sensors": true,
       "base_cycle_time": 57.0,
       "variance_std": 4.0
     },
     {
       "id": "S7",
       "name": "Final Torque",
+      "type": "automated",
+      "has_sensors": true,
       "base_cycle_time": 54.0,
       "variance_std": 3.0
     },
     {
       "id": "S8",
       "name": "End-of-Line Test",
+      "type": "automated",
+      "has_sensors": true,
       "base_cycle_time": 58.0,
       "variance_std": 4.0
     }
