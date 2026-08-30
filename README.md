@@ -2,7 +2,8 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![SimPy](https://img.shields.io/badge/Simulation-SimPy-orange.svg)](https://simpy.readthedocs.io/)
-[![Streamlit](https://img.shields.io/badge/Dashboard-Streamlit-red.svg)](https://streamlit.io/)
+[![React](https://img.shields.io/badge/Dashboard-React%20%2F%20TanStack-blue.svg)](https://react.dev/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-teal.svg)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Accenture Innovation Challenge](https://img.shields.io/badge/Accenture_Challenge-2026_Round_2-purple.svg)](#)
 
@@ -103,11 +104,19 @@ $$\text{Optimal Fix} = \arg\min_{\text{Branch } \in \{A, B, C\}} \left(\text{Dis
 
 ## 🚀 Getting Started & Execution
 
+The project has two parts that run independently: a **FastAPI backend** (wraps the
+Python simulation engines in `core/` as a JSON API) and a **React dashboard**
+(`frontend/`). Note that the dashboard currently ships with its own self-contained
+TypeScript port of the simulation (`frontend/src/lib/twin/`) and does not call the
+backend yet — so you only need to run the backend if you're working on the API
+itself or wiring the two together.
+
 ### Prerequisites
 * Python 3.10 or higher
+* Node.js 18+ (or Bun) and npm
 * Git
 
-### Installation & Setup
+### Backend (FastAPI)
 
 1. **Clone the repository:**
    ```bash
@@ -131,12 +140,29 @@ $$\text{Optimal Fix} = \arg\min_{\text{Branch } \in \{A, B, C\}} \left(\text{Dis
    pip install -r requirements.txt
    ```
 
-4. **Launch the interactive Streamlit dashboard:**
+4. **Launch the API server:**
    ```bash
-   streamlit run app.py
+   python -m uvicorn api:app --reload --port 8000
    ```
 
-The application will open automatically in your browser at `http://localhost:8501`.
+   The API will be available at `http://127.0.0.1:8000`, with interactive docs at
+   `http://127.0.0.1:8000/docs`.
+
+### Frontend (React dashboard)
+
+1. **Install dependencies** (from the `frontend/` folder, in a separate terminal):
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+2. **Launch the dev server:**
+   ```bash
+   npm run dev
+   ```
+
+   The dashboard will be available at `http://localhost:5173`. It has three views:
+   `/supervisor`, `/plant-manager`, and `/leadership`.
 
 ---
 
@@ -160,9 +186,11 @@ Use the interactive scenario buttons in the application sidebar to test the digi
 
 ## 👥 Multi-Persona User Experience
 
-* **🛠️ Floor Supervisor View:** Real-time animated line topology, lookahead time-scrubber slider (0 to 45 mins), active virtual sensor feeds, and 1-click execution cards.
-* **📊 Plant Manager View:** OEE metric tracking (Availability, Performance, Quality), station bottleneck Pareto charts, and First Pass Yield (FPY) trends.
-* **💼 Executive Leadership View:** Annual downtime financial savings calculator, payback period metrics, and a 3-phase multi-plant deployment roadmap.
+* **🛠️ Floor Supervisor View** (`/supervisor`): Real-time animated line topology, lookahead time-scrubber slider (0 to 45 mins), active virtual sensor feeds, and 1-click execution cards.
+* **📊 Plant Manager View** (`/plant-manager`): OEE metric tracking (Availability, Performance, Quality), station bottleneck Pareto charts, and First Pass Yield (FPY) trends.
+* **💼 Executive Leadership View** (`/leadership`): Annual downtime financial savings calculator, payback period metrics, and a 3-phase multi-plant deployment roadmap.
+
+These three views are implemented as routes in the React dashboard (`frontend/src/routes/`).
 
 ---
 
@@ -170,23 +198,28 @@ Use the interactive scenario buttons in the application sidebar to test the digi
 
 ```
 digitaltwin-ai/
-├── core/
-│   ├── factory_sim.py        # SimPy discrete-event physical line simulation
-│   ├── virtual_sensor.py     # Transit delta-T soft sensing for dark stations
-│   ├── quality_tracker.py    # Digital birth certificate & cumulative tolerance tracker
-│   ├── lookahead_twin.py     # Fast-forward 45-minute shadow simulation engine
-│   ├── root_cause.py         # Chronological temporal backtracking isolator
-│   └── prescriptive.py       # 3-Branch parallel sandbox fix evaluator
-├── ui/
-│   ├── supervisor_view.py    # Real-time topology & 1-click action UI
-│   ├── plant_manager_view.py # OEE analytics & bottleneck Pareto UI
-│   └── leadership_view.py    # Financial ROI & multi-plant scaling UI
+├── core/                      # Python simulation engines (used by api.py)
+│   ├── factory_sim.py         # SimPy discrete-event physical line simulation
+│   ├── virtual_sensor.py      # Transit delta-T soft sensing for dark stations
+│   ├── quality_tracker.py     # Digital birth certificate & cumulative tolerance tracker
+│   ├── lookahead_twin.py      # Fast-forward 45-minute shadow simulation engine
+│   ├── root_cause.py          # Chronological temporal backtracking isolator
+│   └── prescriptive.py        # 3-Branch parallel sandbox fix evaluator
 ├── data/
-│   └── line_config.json      # Station parameters, takt times, buffer capacities
-├── app.py                    # Master Streamlit web application
-├── requirements.txt          # Python library dependencies
-└── README.md                 # System architecture & execution documentation
+│   └── line_config.json       # Station parameters, takt times, buffer capacities
+├── api.py                     # FastAPI wrapper exposing the core engines as JSON
+├── frontend/                  # React / TanStack Start dashboard (the live UI)
+│   └── src/
+│       ├── routes/            # /supervisor, /plant-manager, /leadership pages
+│       └── lib/twin/          # Standalone TypeScript port of the simulation engines
+├── requirements.txt           # Python library dependencies
+└── README.md                  # System architecture & execution documentation
 ```
+
+> **Note:** `frontend/src/lib/twin/` currently duplicates the simulation logic in
+> `core/` in TypeScript, so the dashboard runs independently of the FastAPI
+> backend. Wiring the frontend to call `api.py` instead is a natural next step
+> if you want a single source of truth for the simulation.
 
 ---
 
