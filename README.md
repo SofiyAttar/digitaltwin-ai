@@ -198,22 +198,34 @@ These three views are implemented as routes in the React dashboard (`frontend/sr
 
 ```
 digitaltwin-ai/
-├── core/                      # Python simulation engines (used by api.py)
-│   ├── factory_sim.py         # SimPy discrete-event physical line simulation
-│   ├── virtual_sensor.py      # Transit delta-T soft sensing for dark stations
-│   ├── quality_tracker.py     # Digital birth certificate & cumulative tolerance tracker
-│   ├── lookahead_twin.py      # Fast-forward 45-minute shadow simulation engine
-│   ├── root_cause.py          # Chronological temporal backtracking isolator
-│   └── prescriptive.py        # 3-Branch parallel sandbox fix evaluator
+├── core/                           # Python simulation engines (FastAPI backend)
+│   ├── factory_sim.py              # SimPy discrete-event physical line simulation
+│   ├── virtual_sensor.py           # Transit delta-T soft sensing for dark stations
+│   ├── quality_tracker.py          # Digital birth certificate & cumulative tolerance tracker
+│   ├── lookahead_twin.py           # Fast-forward 45-minute shadow simulation engine
+│   ├── root_cause.py               # Chronological temporal backtracking isolator
+│   └── prescriptive.py             # 3-Branch parallel sandbox fix evaluator
 ├── data/
-│   └── line_config.json       # Station parameters, takt times, buffer capacities
-├── api.py                     # FastAPI wrapper exposing the core engines as JSON
-├── frontend/                  # React / TanStack Start dashboard (the live UI)
-│   └── src/
-│       ├── routes/            # /supervisor, /plant-manager, /leadership pages
-│       └── lib/twin/          # Standalone TypeScript port of the simulation engines
-├── requirements.txt           # Python library dependencies
-└── README.md                  # System architecture & execution documentation
+│   └── line_config.json            # Station parameters, takt times, buffer capacities
+├── frontend/                       # React 19 + TanStack + Vite Dashboard
+│   ├── public/                     # Static assets (favicons, robots.txt)
+│   ├── src/
+│   │   ├── components/             # Custom dashboard panels & topology visualizers
+│   │   │   └── ui/                 # Radix UI / shadcn primitives (buttons, sliders, cards)
+│   │   ├── hooks/                  # Custom React lifecycle & state hooks
+│   │   ├── lib/
+│   │   │   ├── twin/               # TypeScript port of simulation & virtual sensing logic
+│   │   │   └── utils.ts            # Styling utilities (clsx, tailwind-merge)
+│   │   ├── routes/                 # File-based routes (/supervisor, /plant-manager, /leadership)
+│   │   └── styles.css              # Tailwind v4 dark-mode industrial control-room theme
+│   ├── components.json             # shadcn UI configuration
+│   ├── eslint.config.js            # Code quality & linter configuration
+│   ├── package.json                # Frontend dependencies & dev scripts
+│   ├── tsconfig.json               # TypeScript compiler options & path aliases
+│   └── vite.config.ts              # Vite bundler & plugin configuration
+├── api.py                          # FastAPI REST API wrapper (Uvicorn server)
+├── requirements.txt                # Python backend dependencies
+└── README.md                       # System architecture & documentation
 ```
 
 > **Note:** `frontend/src/lib/twin/` currently duplicates the simulation logic in
